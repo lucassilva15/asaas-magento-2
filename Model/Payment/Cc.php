@@ -8,7 +8,6 @@
 namespace Asaas\Magento2\Model\Payment;
 
 use Magento\Sales\Model\Order;
-use Magento\TestFramework\ObjectManager;
 
 class Cc extends \Magento\Payment\Model\Method\AbstractMethod {
 
@@ -77,21 +76,21 @@ class Cc extends \Magento\Payment\Model\Method\AbstractMethod {
       $paymentInfo = $info->getAdditionalInformation();
 
       //pegando dados do pedido do clioente
+      /** @var Order */
       $order = $payment->getOrder();
       $shippingaddress = $order->getShippingAddress();
       $customer = $this->_customerRepositoryInterface->load($order->getCustomerId());
 
-      if(!isset($shippingaddress->getStreet()[2])){
+      if (!isset($shippingaddress->getStreet()[2])) {
         throw new \Exception("Por favor, preencha seu endereço corretamente.", 1);
       }
 
-      if(!$customer->getTaxvat()){
+      if (!$customer->getTaxvat()) {
         $cpfCnpj = $paymentInfo['cc_owner_cpf'];
-      }
-      else {
+      } else {
         $cpfCnpj = $customer->getTaxvat();
       }
-      
+
       //Verifica a existência do usuário na Asaas obs: colocar cpf aqui
       $user = (array)$this->userExists(preg_replace('/\D/', '', $cpfCnpj));
 
@@ -121,35 +120,38 @@ class Cc extends \Magento\Payment\Model\Method\AbstractMethod {
       }
 
       $values = explode("-", $paymentInfo['installments']);
+      $installments = $this->helperData->getInstallments();
+      $installmentInterest = $installments[(int)$values[0]];
+      $installmentValue = (($order->getGrandTotal() * (($installmentInterest / 100) + 1)) / (int)$values[0]);
 
-      //Monta o Array para o envio das informações ao Asaas
-      $request = [
-        'customer' => $currentUser,
-        'billingType' => 'CREDIT_CARD',
-        'installmentCount' => (int)$values[0],
-        'installmentValue' => (float)$values[1],
-        'dueDate' => $date->format('Y-m-d'),
-        'description' => "Pedido " . $order->getIncrementId(),
-        'externalReference' => $order->getIncrementId(),
-        'creditCard' => [
-          'holderName' => $paymentInfo['credit_card_owner'],
-          'number' => $paymentInfo['credit_card_number'],
-          'expiryMonth' => $paymentInfo['credit_card_exp_month'],
-          'expiryYear' => $paymentInfo['credit_card_exp_year'],
-          'ccv' => $paymentInfo['credit_card_cid'],
-        ],
-        'creditCardHolderInfo' => [
-          'name' => $shippingaddress->getFirstName() . ' ' . $shippingaddress->getLastName(),
-          'email' => $shippingaddress->getEmail(),
-          'cpfCnpj' => $paymentInfo['cc_owner_cpf'],
-          'postalCode' => $shippingaddress->getPostcode(),
-          'addressNumber' => $shippingaddress->getStreet()[1],
-          'addressComplement' => null,
-          'phone' => $shippingaddress->getTelephone(),
-          'mobilePhone' => $paymentInfo['credit_card_phone'],
-        ],
-        'remoteIp' => $order["remote_ip"],
-      ];
+        //Monta o Array para o envio das informações ao Asaas
+        $request = [
+          'customer' => $currentUser,
+          'billingType' => 'CREDIT_CARD',
+          'installmentCount' => (int)$values[0],
+          'installmentValue' => $installmentValue,
+          'dueDate' => $date->format('Y-m-d'),
+          'description' => "Pedido " . $order->getIncrementId(),
+          'externalReference' => $order->getIncrementId(),
+          'creditCard' => [
+            'holderName' => $paymentInfo['credit_card_owner'],
+            'number' => $paymentInfo['credit_card_number'],
+            'expiryMonth' => $paymentInfo['credit_card_exp_month'],
+            'expiryYear' => $paymentInfo['credit_card_exp_year'],
+            'ccv' => $paymentInfo['credit_card_cid'],
+          ],
+          'creditCardHolderInfo' => [
+            'name' => $shippingaddress->getFirstName() . ' ' . $shippingaddress->getLastName(),
+            'email' => $shippingaddress->getEmail(),
+            'cpfCnpj' => $paymentInfo['cc_owner_cpf'],
+            'postalCode' => $shippingaddress->getPostcode(),
+            'addressNumber' => $shippingaddress->getStreet()[1],
+            'addressComplement' => null,
+            'phone' => $shippingaddress->getTelephone(),
+            'mobilePhone' => $paymentInfo['credit_card_phone'],
+          ],
+          'remoteIp' => $order["remote_ip"],
+        ];
 
       $paymentDone = (array)$this->doPayment($request);
 
